@@ -1,7 +1,7 @@
 import {getProductBySlug} from '@/lib/data'
 
 export default function product({params}){
-    console.log(params.slug)
+    // console.log(params.slug)
     const p = getProductBySlug(params.slug)
     console.log(p)
 

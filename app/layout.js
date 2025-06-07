@@ -1,7 +1,10 @@
 import { Geist, Geist_Mono } from "next/font/google";
 import "./globals.css";
+import { BarChartOutlined, GoldOutlined, HomeOutlined, UserOutlined } from '@ant-design/icons';
 import { AntdRegistry } from "@ant-design/nextjs-registry";
-import { Layout } from "antd";
+import { Layout, Menu } from "antd"
+import Link from "next/link";
+
 
 const geistSans = Geist({
   variable: "--font-geist-sans",
@@ -26,9 +29,27 @@ export default function RootLayout({ children }) {
       >
         <AntdRegistry>
           <Layout style={{
-            minHeight: '100vh',
-            display: "flex"
+            display: "flex",
+            width: "100%",
+            height: "100vh",
           }}>
+            <Menu mode="horizontal" items={[
+              {
+                label: (
+                  <Link href='/home'>Home</Link>
+                ), key: 'home', icon: <HomeOutlined style={{ fontSize: '18px' }} />
+              },
+              {
+                label: (
+                  <Link href='/products'>Products list</Link>
+                ),
+                key: 'products-list',
+                icon: <GoldOutlined style={{ fontSize: '18px' }} />
+              },
+              { label: 'Statistics', key: 'statistics', icon: <BarChartOutlined style={{ fontSize: '18px' }} /> },
+            ]}
+              style={{ display: 'flex', height: '60px', lineHeight: '60px', fontSize: '18px', fontWeight: 'bold' }
+              }></Menu>
             {children}
           </Layout>
         </AntdRegistry>
