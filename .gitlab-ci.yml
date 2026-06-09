@@ -7,36 +7,55 @@ variables:
   PROJECT_NAME: "next-blog"
   REPOSITORIES_NAME: "next-blog-image"
   CONTAINER_NAME: "next-blog-container"
-  IMAGE_TAG: "latest"
+  # Kết hợp short SHA để mỗi lần build là một tag duy nhất, giúp dễ rollback
+  IMAGE_TAG: "lastest"
+  IMAGE_FULL_NAME: "$REGISTRY_NAME/$PROJECT_NAME/$REPOSITORIES_NAME"
+
+# Cấu hình chung cho các job chỉ chạy trên nhánh main
+.main-branch-only:
+  rules:
+    - if: $CI_COMMIT_BRANCH == "main"
+
 # ======================
 # BUILD IMAGE STAGE
 # ======================
 docker-image-build:
   stage: build
-  script:
-    - echo "Start build image"
-    - echo "$DOCKER_REGISTRY_PASSWORD" | docker login $REGISTRY_NAME -u "$DOCKER_REGISTRY_USERNAME" --password-stdin
-    - echo "CurentBranchName=$CI_COMMIT_REF_NAME"
-    - echo "tag=$CI_COMMIT_TAG"
-    - echo "DefaultBranchName=$CI_DEFAULT_BRANCH"
-    - docker build -t $REGISTRY_NAME/$PROJECT_NAME/$REPOSITORIES_NAME:$IMAGE_TAG .
-    # Push image
-    - docker push $REGISTRY_NAME/$PROJECT_NAME/$REPOSITORIES_NAME:$IMAGE_TAG
-  only:
-    - main
+  extends: .main-branch-only
   tags:
     - phuong
+  script:
+    - echo "Start build image..."
+    - echo "$DOCKER_REGISTRY_PASSWORD" | docker login $REGISTRY_NAME -u "$DOCKER_REGISTRY_USERNAME" --password-stdin
+
+    # Build đồng thời 2 tag: tag theo commit SHA (để lưu trữ) và tag $IMAGE_TAG (để deploy)
+    - docker build -t $IMAGE_FULL_NAME:$IMAGE_TAG -t $IMAGE_FULL_NAME:$IMAGE_TAG .
+
+    # Push cả 2 tag lên registry
+    - docker push $IMAGE_FULL_NAME:$IMAGE_TAG
+    # Dọn dẹp image vừa build trên máy runner để tránh đầy ổ cứng
+    - docker rmi $IMAGE_FULL_NAME:$IMAGE_TAG $IMAGE_FULL_NAME:$IMAGE_TAG || true
 
 # ======================
 # DEPLOY STAGE
 # ======================
 next-blog-deploy:
   stage: deploy
-  script:
-    - echo "Deploying image $IMAGE_TAG to Kubernetes"
-    - docker pull $REGISTRY_NAME/$PROJECT_NAME/$REPOSITORIES_NAME:$IMAGE_TAG
-    - docker run -d -p 3333:3000 --name $CONTAINER_NAME $REGISTRY_NAME/$PROJECT_NAME/$REPOSITORIES_NAME:$IMAGE_TAG
-  only:
-    - main
+  extends: .main-branch-only
   tags:
     - phuong-deploy
+  script:
+    - echo "Deploying application..."
+    - echo "$DOCKER_REGISTRY_PASSWORD" | docker login $REGISTRY_NAME -u "$DOCKER_REGISTRY_USERNAME" --password-stdin
+
+    # Pull image mới nhất về
+    - docker pull $IMAGE_FULL_NAME:$IMAGE_TAG
+
+    # Sửa lỗi sập pipeline: Kiểm tra xem container có đang chạy không, nếu có thì mới stop và xóa
+    - docker ps -a -q --filter "name=$CONTAINER_NAME" | grep -q . && docker rm -f $CONTAINER_NAME || true
+
+    # Chạy container mới
+    - docker run -d -p 3333:3000 --name $CONTAINER_NAME --restart always $IMAGE_FULL_NAME:$IMAGE_TAG
+
+    # Dọn dẹp các bản build cũ/bị rác (dangling images) trên server deploy
+    - docker image prune -f
