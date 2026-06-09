@@ -1,0 +1,42 @@
+stages:
+  - build
+  - deploy
+
+variables:
+  REGISTRY_NAME: "registry.h2qsolution.com"
+  PROJECT_NAME: "next-blog"
+  REPOSITORIES_NAME: "next-blog-image"
+  CONTAINER_NAME: "next-blog-container"
+  IMAGE_TAG: "latest"
+# ======================
+# BUILD IMAGE STAGE
+# ======================
+docker-image-build:
+  stage: build
+  script:
+    - echo "Start build image"
+    - echo "$DOCKER_REGISTRY_PASSWORD" | docker login $REGISTRY_NAME -u "$DOCKER_REGISTRY_USERNAME" --password-stdin
+    - echo "CurentBranchName=$CI_COMMIT_REF_NAME"
+    - echo "tag=$CI_COMMIT_TAG"
+    - echo "DefaultBranchName=$CI_DEFAULT_BRANCH"
+    - docker build -t $REGISTRY_NAME/$PROJECT_NAME/$REPOSITORIES_NAME:$IMAGE_TAG .
+    # Push image
+    - docker push $REGISTRY_NAME/$PROJECT_NAME/$REPOSITORIES_NAME:$IMAGE_TAG
+  only:
+    - main
+  tags:
+    - phuong
+
+# ======================
+# DEPLOY STAGE
+# ======================
+next-blog-deploy:
+  stage: deploy
+  script:
+    - echo "Deploying image $IMAGE_TAG to Kubernetes"
+    - docker pull $REGISTRY_NAME/$PROJECT_NAME/$REPOSITORIES_NAME:$IMAGE_TAG
+    - docker run -d -p 3333:3000 --name $CONTAINER_NAME $REGISTRY_NAME/$PROJECT_NAME/$REPOSITORIES_NAME:$IMAGE_TAG
+  only:
+    - main
+  tags:
+    - phuong-deploy
